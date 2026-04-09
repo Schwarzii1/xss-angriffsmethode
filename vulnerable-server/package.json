@@ -1,0 +1,13 @@
+{
+  "name": "vulnerable-guestbook",
+  "version": "1.0.0",
+  "description": "Absichtlich verwundbarer Gästebuch-Server für Labor 8 – Verteilte Systeme",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.18.2"
+  }
+}
