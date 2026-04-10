@@ -19,6 +19,7 @@ const ATK_PORT     = 4000;
 function isAttackerRoute(path) {
   return path === '/steal' ||
          path.startsWith('/steal?') ||
+         path.startsWith('/keylog') ||
          path.startsWith('/attacker') ||
          path === '/clear';
 }
@@ -60,6 +61,6 @@ const server = http.createServer((req, res) => {
 
 server.listen(GATEWAY_PORT, () => {
   console.log(`[Gateway] läuft auf http://localhost:${GATEWAY_PORT}`);
-  console.log(`[Gateway]   /steal*, /attacker*, /clear  →  :${ATK_PORT}`);
+  console.log(`[Gateway]   /steal*, /keylog*, /attacker*, /clear  →  :${ATK_PORT}`);
   console.log(`[Gateway]   alles andere                 →  :${BANK_PORT}`);
 });

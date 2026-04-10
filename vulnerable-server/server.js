@@ -21,6 +21,9 @@ const sessions = {};
 // Transaktionshistorie
 const transaktionen = [];
 
+// Support-Anfragen
+const supportAnfragen = [];
+
 function generateToken(username) {
   const token = `sess-${username}-${Math.random().toString(36).slice(2)}`;
   sessions[token] = username;
@@ -81,6 +84,7 @@ function navBar(user) {
     Eingeloggt als <strong>${user.username}</strong>
     <a href="/dashboard">Dashboard</a>
     <a href="/ueberweisung">Überweisung</a>
+    <a href="/support">Support</a>
     <a href="/logout">Logout</a>
   </div></nav>`;
 }
@@ -265,6 +269,87 @@ app.post('/ueberweisung', (req, res) => {
 });
 
 // -------------------------------------------------------
+// GET /support  (nur Kunden)
+// -------------------------------------------------------
+app.get('/support', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.redirect('/login');
+  if (user.role === 'Admin') return res.redirect('/admin');
+
+  const meineAnfragen = supportAnfragen.filter(a => a.von === user.username);
+  const anfragenHtml = meineAnfragen.length === 0
+    ? '<p><em>Noch keine Anfragen gesendet.</em></p>'
+    : meineAnfragen.slice().reverse().map(a => `
+      <div class="card">
+        <strong>${a.betreff}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small>
+        <p style="white-space:pre-wrap;">${a.nachricht}</p>
+        ${a.antwort
+          ? `<div class="success"><strong>Antwort vom Support:</strong><br>${a.antwort}</div>`
+          : '<div class="warning">⏳ Noch keine Antwort vom Support.</div>'
+        }
+      </div>`).join('');
+
+  const msg = req.query.ok ? '<div class="success">✓ Anfrage erfolgreich gesendet.</div>' : '';
+
+  res.send(`<!DOCTYPE html>
+<html lang="de"><head><meta charset="UTF-8"><title>Support – DemoBank</title><style>${css}</style></head>
+<body>
+  ${navBar(user)}
+  <h1>Support</h1>
+  ${msg}
+  <div class="card">
+    <h2>Neue Anfrage</h2>
+    <form method="POST" action="/support">
+      <label>Betreff:<br><input type="text" name="betreff" placeholder="z.B. Passwort vergessen" required></label>
+      <label>Nachricht:<br><textarea name="nachricht" rows="5" placeholder="Beschreibe dein Anliegen…" required></textarea></label>
+      <button type="submit">Anfrage senden</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Meine Anfragen</h2>
+    ${anfragenHtml}
+  </div>
+</body></html>`);
+});
+
+// -------------------------------------------------------
+// POST /support
+// -------------------------------------------------------
+app.post('/support', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.redirect('/login');
+
+  const { betreff, nachricht } = req.body;
+  supportAnfragen.push({
+    id: Date.now(),
+    von: user.username,
+    betreff,
+    nachricht,  // VULNERABILITY: ohne Escaping gespeichert und gerendert
+    timestamp: new Date().toLocaleString('de-DE'),
+    antwort: null,
+  });
+
+  console.log(`[Support] ${user.username}: ${betreff}`);
+  res.redirect('/support?ok=1');
+});
+
+// -------------------------------------------------------
+// POST /admin/reply
+// -------------------------------------------------------
+app.post('/admin/reply', (req, res) => {
+  const user = getUser(req);
+  if (!user || user.role !== 'Admin') return res.redirect('/login');
+
+  const { id, antwort } = req.body;
+  const anfrage = supportAnfragen.find(a => a.id === parseInt(id));
+  if (anfrage) {
+    anfrage.antwort = antwort;
+    console.log(`[Admin] Antwort auf Anfrage von ${anfrage.von}: ${antwort}`);
+  }
+  res.redirect('/admin');
+});
+
+// -------------------------------------------------------
 // GET /admin  (nur Admin)
 // -------------------------------------------------------
 app.get('/admin', (req, res) => {
@@ -314,6 +399,26 @@ app.get('/admin', (req, res) => {
           <td>${t.verwendungszweck}</td>
         </tr>`).join('')}
     </table>`}
+  </div>
+
+  <div class="card">
+    <h2>Support-Anfragen</h2>
+    ${supportAnfragen.length === 0 ? '<p><em>Keine Anfragen vorhanden.</em></p>' : supportAnfragen.slice().reverse().map(a => `
+    <div style="border:1px solid #d0d7e3;border-radius:6px;padding:16px;margin-bottom:12px;background:white;">
+      <strong>Von: ${a.von}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small><br>
+      <strong>Betreff:</strong> ${a.betreff}<br><br>
+      <div style="background:#f8f9fa;padding:10px;border-radius:4px;margin-bottom:10px;">${a.nachricht}</div>
+      ${a.antwort
+        ? `<div class="success"><strong>Geantwortet:</strong> ${a.antwort}</div>`
+        : `<form method="POST" action="/admin/reply" style="margin-top:8px;">
+            <input type="hidden" name="id" value="${a.id}">
+            <label>Antwort an ${a.von}:<br>
+              <textarea name="antwort" rows="3" placeholder="z.B. Neues Passwort: …"></textarea>
+            </label>
+            <button type="submit">Antworten</button>
+          </form>`
+      }
+    </div>`).join('')}
   </div>
 
   <div class="warning">
