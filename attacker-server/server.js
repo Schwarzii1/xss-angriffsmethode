@@ -143,11 +143,11 @@ app.get('/', requireAuth, (req, res) => {
   <h1>Angreifer-Server</h1>
   <p class="subtitle">Labor 8 – Verteilte Systeme | XSS Demo &nbsp;|&nbsp; Auto-Refresh alle 3s</p>
 
-  <h2>🍪 Gestohlene Cookies &nbsp;<small style="color:#aaa;font-size:0.7em;">/steal</small></h2>
+  <h2>Gestohlene Cookies &nbsp;<small style="color:#aaa;font-size:0.7em;">/steal</small></h2>
   <div class="info">XSS-Payload sendet Session-Cookie des Opfers hierher.</div>
   <pre>${esc(cookieContent) || '(noch keine Cookies empfangen)'}</pre>
 
-  <h2>⌨️ Keylogger &nbsp;<small style="color:#aaa;font-size:0.7em;">/keylog</small></h2>
+  <h2>Keylogger &nbsp;<small style="color:#aaa;font-size:0.7em;">/keylog</small></h2>
   <div class="info">Keylogger läuft im Admin-Browser – Eingaben werden hier geloggt.</div>
   <pre>${esc(keylogContent) || '(noch keine Tastatureingaben empfangen)'}</pre>
 </body>

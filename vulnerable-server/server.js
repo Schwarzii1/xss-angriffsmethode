@@ -99,8 +99,8 @@ const css = `
 function validationToggle() {
   const checked = inputValidation ? 'checked' : '';
   const label   = inputValidation
-    ? '<span style="color:#90ee90;">🛡️ Input Validation: AN</span>'
-    : '<span style="color:#ffaaaa;">⚠️ Input Validation: AUS</span>';
+    ? '<span style="color:#90ee90;">Input Validation: AN</span>'
+    : '<span style="color:#ffaaaa;">Input Validation: AUS</span>';
   return `<label style="cursor:pointer;margin-left:20px;font-size:0.85em;display:flex;align-items:center;gap:6px;">
     <input type="checkbox" ${checked} onchange="fetch('/toggle-validation').then(()=>location.reload())" style="width:auto;margin:0;">
     ${label}
@@ -108,16 +108,16 @@ function validationToggle() {
 }
 
 function navBar(user) {
-  if (!user) return `<nav><span>🏦 DemoBank Online-Banking</span><div><a href="/login">Login</a></div></nav>`;
+  if (!user) return `<nav><span>DemoBank Online-Banking</span><div><a href="/login">Login</a></div></nav>`;
   if (user.role === 'Admin') {
-    return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
+    return `<nav><span>DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
       <span>Eingeloggt als <strong>${user.username}</strong></span>
       <a href="/admin">Admin-Panel</a>
       <a href="/logout">Logout</a>
       ${validationToggle()}
     </div></nav>`;
   }
-  return `<nav><span>🏦 DemoBank Online-Banking</span><div>
+  return `<nav><span>DemoBank Online-Banking</span><div>
     Eingeloggt als <strong>${user.username}</strong>
     <a href="/dashboard">Dashboard</a>
     <a href="/ueberweisung">Überweisung</a>
@@ -218,7 +218,7 @@ app.get('/dashboard', (req, res) => {
   ${navBar(user)}
 
   <div class="warning">
-    ⚠️ <strong>Labor 8 – Verteilte Systeme:</strong> Absichtlich unsichere Demo-Anwendung.
+    <strong>Labor 8 – Verteilte Systeme:</strong> Absichtlich unsichere Demo-Anwendung.
   </div>
 
   <h1>Mein Konto</h1>
@@ -252,9 +252,9 @@ app.get('/ueberweisung', (req, res) => {
   if (user.role === 'Admin') return res.redirect('/admin');
 
   const msg = req.query.ok
-    ? `<div class="success">✓ Überweisung über ${req.query.ok} erfolgreich.</div>`
+    ? `<div class="success">Überweisung über ${req.query.ok} erfolgreich.</div>`
     : req.query.fehler
-    ? `<div class="danger">✗ ${req.query.fehler}</div>`
+    ? `<div class="danger">${req.query.fehler}</div>`
     : '';
 
   res.send(`<!DOCTYPE html>
@@ -336,14 +336,14 @@ app.get('/support', (req, res) => {
         <p style="white-space:pre-wrap;">${safeRender(a.nachricht)}</p>
         ${a.antwort
           ? `<div class="success"><strong>Antwort vom Support:</strong><br>${a.antwort}</div>`
-          : '<div class="warning">⏳ Noch keine Antwort vom Support.</div>'
+          : '<div class="warning">Noch keine Antwort vom Support.</div>'
         }
       </div>`).join('');
 
   const msg = req.query.ok
-    ? '<div class="success">✓ Anfrage erfolgreich gesendet.</div>'
+    ? '<div class="success">Anfrage erfolgreich gesendet.</div>'
     : req.query.fehler
-    ? `<div class="danger">🛡️ ${req.query.fehler}</div>`
+    ? `<div class="danger">${req.query.fehler}</div>`
     : '';
 
   res.send(`<!DOCTYPE html>
@@ -487,7 +487,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <div class="card">
-    <h2>🛡️ Erkannte XSS-Angriffe</h2>
+    <h2>Erkannte XSS-Angriffe</h2>
     ${xssAngriffe.length === 0
       ? '<p><em>Keine Angriffe erkannt.</em></p>'
       : `<table>
@@ -504,7 +504,7 @@ app.get('/admin', (req, res) => {
   </div>
 
   <div class="warning">
-    ⚠️ <strong>Labor 8:</strong> Der Admin hat kein eigenes Konto — nur Verwaltungsfunktionen.
+    <strong>Labor 8:</strong> Der Admin hat kein eigenes Konto — nur Verwaltungsfunktionen.
   </div>
 </body></html>`);
 });
