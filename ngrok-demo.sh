@@ -159,8 +159,6 @@ tunnels:
   demo:
     proto: http
     addr: 5001
-    basic_auth:
-      - "demo:${DEMO_PASSWORD}"
 NGROK_EOF
 
 log "Starte ngrok-Tunnel (Port 5001)…"
@@ -212,7 +210,7 @@ echo "╔═══════════════════════�
 echo "║        NGROK-DEMO BEREIT – Internet-Modus aktiv             ║"
 echo "╚══════════════════════════════════════════════════════════════╝"
 echo ""
-echo "  Passwort (ngrok-Login):  demo / ${DEMO_PASSWORD}"
+echo "  Passwort (Attacker-Dashboard):  demo / ${DEMO_PASSWORD}"
 echo ""
 echo "  ┌─ OPFER & ANGREIFER (Bank-Seite) ──────────────────────────"
 echo "  │  URL:   ${PUBLIC_URL}"
