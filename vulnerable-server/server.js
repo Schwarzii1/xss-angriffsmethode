@@ -21,6 +21,34 @@ const sessions = {};
 // Transaktionshistorie
 const transaktionen = [];
 
+// Support-Anfragen
+const supportAnfragen = [];
+
+// Demo-Schutzschalter
+let inputValidation = false;
+
+// Erkannte XSS-Angriffe
+const xssAngriffe = [];
+
+function containsXSS(str) {
+  return /<[^>]*>|javascript:|on\w+\s*=/i.test(str);
+}
+
+function safeRender(str) {
+  if (!inputValidation) return str;
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function logXSS(user, feld, payload) {
+  xssAngriffe.push({
+    timestamp: new Date().toLocaleString('de-DE'),
+    von: user,
+    feld,
+    payload,
+  });
+  console.log(`[XSS BLOCKIERT] ${user} → Feld: ${feld} | Payload: ${payload}`);
+}
+
 function generateToken(username) {
   const token = `sess-${username}-${Math.random().toString(36).slice(2)}`;
   sessions[token] = username;
@@ -68,22 +96,44 @@ const css = `
   .gruen { color: #28a745; font-weight: bold; }
 `;
 
+function validationToggle() {
+  const checked = inputValidation ? 'checked' : '';
+  const label   = inputValidation
+    ? '<span style="color:#90ee90;">Input Validation: AN</span>'
+    : '<span style="color:#ffaaaa;">Input Validation: AUS</span>';
+  return `<label style="cursor:pointer;margin-left:20px;font-size:0.85em;display:flex;align-items:center;gap:6px;">
+    <input type="checkbox" ${checked} onchange="fetch('/toggle-validation').then(()=>location.reload())" style="width:auto;margin:0;">
+    ${label}
+  </label>`;
+}
+
 function navBar(user) {
-  if (!user) return `<nav><span>🏦 DemoBank Online-Banking</span><div><a href="/login">Login</a></div></nav>`;
+  if (!user) return `<nav><span>DemoBank Online-Banking</span><div><a href="/login">Login</a></div></nav>`;
   if (user.role === 'Admin') {
-    return `<nav><span>🏦 DemoBank Online-Banking</span><div>
-      Eingeloggt als <strong>${user.username}</strong>
+    return `<nav><span>DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
+      <span>Eingeloggt als <strong>${user.username}</strong></span>
       <a href="/admin">Admin-Panel</a>
       <a href="/logout">Logout</a>
+      ${validationToggle()}
     </div></nav>`;
   }
-  return `<nav><span>🏦 DemoBank Online-Banking</span><div>
+  return `<nav><span>DemoBank Online-Banking</span><div>
     Eingeloggt als <strong>${user.username}</strong>
     <a href="/dashboard">Dashboard</a>
     <a href="/ueberweisung">Überweisung</a>
+    <a href="/support">Support</a>
     <a href="/logout">Logout</a>
   </div></nav>`;
 }
+
+// -------------------------------------------------------
+// GET /toggle-validation
+// -------------------------------------------------------
+app.get('/toggle-validation', (req, res) => {
+  inputValidation = !inputValidation;
+  console.log(`[Demo] Input Validation: ${inputValidation ? 'AN' : 'AUS'}`);
+  res.sendStatus(200);
+});
 
 // -------------------------------------------------------
 // GET /login
@@ -157,9 +207,9 @@ app.get('/dashboard', (req, res) => {
         return `<tr>
           <td>${t.timestamp}</td>
           <td>${gegenseite}</td>
-          <td>${t.verwendungszweck}</td>
+          <td>${safeRender(t.verwendungszweck)}</td>
           <td>${betragHtml}</td>
-        </tr>`;  // VULNERABILITY: verwendungszweck direkt gerendert
+        </tr>`;  // VULNERABILITY: verwendungszweck direkt gerendert (wenn Validation AUS)
       }).join('');
 
   res.send(`<!DOCTYPE html>
@@ -168,7 +218,7 @@ app.get('/dashboard', (req, res) => {
   ${navBar(user)}
 
   <div class="warning">
-    ⚠️ <strong>Labor 8 – Verteilte Systeme:</strong> Absichtlich unsichere Demo-Anwendung.
+    <strong>Labor 8 – Verteilte Systeme:</strong> Absichtlich unsichere Demo-Anwendung.
   </div>
 
   <h1>Mein Konto</h1>
@@ -202,9 +252,9 @@ app.get('/ueberweisung', (req, res) => {
   if (user.role === 'Admin') return res.redirect('/admin');
 
   const msg = req.query.ok
-    ? `<div class="success">✓ Überweisung über ${req.query.ok} erfolgreich.</div>`
+    ? `<div class="success">Überweisung über ${req.query.ok} erfolgreich.</div>`
     : req.query.fehler
-    ? `<div class="danger">✗ ${req.query.fehler}</div>`
+    ? `<div class="danger">${req.query.fehler}</div>`
     : '';
 
   res.send(`<!DOCTYPE html>
@@ -239,6 +289,11 @@ app.post('/ueberweisung', (req, res) => {
   const { iban, empfaenger, betrag, verwendungszweck } = req.body;
   const betragNum = parseFloat(betrag);
 
+  if (inputValidation && containsXSS(verwendungszweck)) {
+    logXSS(user.username, 'Verwendungszweck', verwendungszweck);
+    return res.redirect('/ueberweisung?fehler=XSS-Angriff+erkannt+und+blockiert');
+  }
+
   if (isNaN(betragNum) || betragNum <= 0)
     return res.redirect('/ueberweisung?fehler=Ungültiger+Betrag');
   if (USERS[user.username].kontostand < betragNum)
@@ -262,6 +317,101 @@ app.post('/ueberweisung', (req, res) => {
 
   console.log(`[Überweisung] ${user.username} → ${empfaenger} (${iban}): ${formatEuro(betragNum)} | Zweck: ${verwendungszweck}`);
   res.redirect(`/ueberweisung?ok=${formatEuro(betragNum)}`);
+});
+
+// -------------------------------------------------------
+// GET /support  (nur Kunden)
+// -------------------------------------------------------
+app.get('/support', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.redirect('/login');
+  if (user.role === 'Admin') return res.redirect('/admin');
+
+  const meineAnfragen = supportAnfragen.filter(a => a.von === user.username);
+  const anfragenHtml = meineAnfragen.length === 0
+    ? '<p><em>Noch keine Anfragen gesendet.</em></p>'
+    : meineAnfragen.slice().reverse().map(a => `
+      <div class="card">
+        <strong>${safeRender(a.betreff)}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small>
+        <p style="white-space:pre-wrap;">${safeRender(a.nachricht)}</p>
+        ${a.antwort
+          ? `<div class="success"><strong>Antwort vom Support:</strong><br>${a.antwort}</div>`
+          : '<div class="warning">Noch keine Antwort vom Support.</div>'
+        }
+      </div>`).join('');
+
+  const msg = req.query.ok
+    ? '<div class="success">Anfrage erfolgreich gesendet.</div>'
+    : req.query.fehler
+    ? `<div class="danger">${req.query.fehler}</div>`
+    : '';
+
+  res.send(`<!DOCTYPE html>
+<html lang="de"><head><meta charset="UTF-8"><title>Support – DemoBank</title><style>${css}</style></head>
+<body>
+  ${navBar(user)}
+  <h1>Support</h1>
+  ${msg}
+  <div class="card">
+    <h2>Neue Anfrage</h2>
+    <form method="POST" action="/support">
+      <label>Betreff:<br><input type="text" name="betreff" placeholder="z.B. Passwort vergessen" required></label>
+      <label>Nachricht:<br><textarea name="nachricht" rows="5" placeholder="Beschreibe dein Anliegen…" required></textarea></label>
+      <button type="submit">Anfrage senden</button>
+    </form>
+  </div>
+  <div class="card">
+    <h2>Meine Anfragen</h2>
+    ${anfragenHtml}
+  </div>
+</body></html>`);
+});
+
+// -------------------------------------------------------
+// POST /support
+// -------------------------------------------------------
+app.post('/support', (req, res) => {
+  const user = getUser(req);
+  if (!user) return res.redirect('/login');
+
+  const { betreff, nachricht } = req.body;
+
+  if (inputValidation && containsXSS(betreff)) {
+    logXSS(user.username, 'Support-Betreff', betreff);
+    return res.redirect('/support?fehler=XSS-Angriff+erkannt+und+blockiert');
+  }
+  if (inputValidation && containsXSS(nachricht)) {
+    logXSS(user.username, 'Support-Nachricht', nachricht);
+    return res.redirect('/support?fehler=XSS-Angriff+erkannt+und+blockiert');
+  }
+
+  supportAnfragen.push({
+    id: Date.now(),
+    von: user.username,
+    betreff,
+    nachricht,  // VULNERABILITY: ohne Escaping gespeichert und gerendert
+    timestamp: new Date().toLocaleString('de-DE'),
+    antwort: null,
+  });
+
+  console.log(`[Support] ${user.username}: ${betreff}`);
+  res.redirect('/support?ok=1');
+});
+
+// -------------------------------------------------------
+// POST /admin/reply
+// -------------------------------------------------------
+app.post('/admin/reply', (req, res) => {
+  const user = getUser(req);
+  if (!user || user.role !== 'Admin') return res.redirect('/login');
+
+  const { id, antwort } = req.body;
+  const anfrage = supportAnfragen.find(a => a.id === parseInt(id));
+  if (anfrage) {
+    anfrage.antwort = antwort;
+    console.log(`[Admin] Antwort auf Anfrage von ${anfrage.von}: ${antwort}`);
+  }
+  res.redirect('/admin');
 });
 
 // -------------------------------------------------------
@@ -311,13 +461,50 @@ app.get('/admin', (req, res) => {
           <td>${t.von}</td>
           <td>${t.an}</td>
           <td>${formatEuro(t.betrag)}</td>
-          <td>${t.verwendungszweck}</td>
+          <td>${safeRender(t.verwendungszweck)}</td>
         </tr>`).join('')}
     </table>`}
   </div>
 
+  <div class="card">
+    <h2>Support-Anfragen</h2>
+    ${supportAnfragen.length === 0 ? '<p><em>Keine Anfragen vorhanden.</em></p>' : supportAnfragen.slice().reverse().map(a => `
+    <div style="border:1px solid #d0d7e3;border-radius:6px;padding:16px;margin-bottom:12px;background:white;">
+      <strong>Von: ${a.von}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small><br>
+      <strong>Betreff:</strong> ${safeRender(a.betreff)}<br><br>
+      <div style="background:#f8f9fa;padding:10px;border-radius:4px;margin-bottom:10px;">${safeRender(a.nachricht)}</div>
+      ${a.antwort
+        ? `<div class="success"><strong>Geantwortet:</strong> ${a.antwort}</div>`
+        : `<form method="POST" action="/admin/reply" style="margin-top:8px;">
+            <input type="hidden" name="id" value="${a.id}">
+            <label>Antwort an ${a.von}:<br>
+              <textarea name="antwort" rows="3" placeholder="z.B. Neues Passwort: …"></textarea>
+            </label>
+            <button type="submit">Antworten</button>
+          </form>`
+      }
+    </div>`).join('')}
+  </div>
+
+  <div class="card">
+    <h2>Erkannte XSS-Angriffe</h2>
+    ${xssAngriffe.length === 0
+      ? '<p><em>Keine Angriffe erkannt.</em></p>'
+      : `<table>
+          <tr><th>Zeit</th><th>Benutzer</th><th>Feld</th><th>Payload</th></tr>
+          ${xssAngriffe.slice().reverse().map(a => `
+          <tr>
+            <td>${a.timestamp}</td>
+            <td>${a.von}</td>
+            <td>${a.feld}</td>
+            <td><code style="font-size:0.8em;word-break:break-all;">${a.payload.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></td>
+          </tr>`).join('')}
+        </table>`
+    }
+  </div>
+
   <div class="warning">
-    ⚠️ <strong>Labor 8:</strong> Der Admin hat kein eigenes Konto — nur Verwaltungsfunktionen.
+    <strong>Labor 8:</strong> Der Admin hat kein eigenes Konto — nur Verwaltungsfunktionen.
   </div>
 </body></html>`);
 });
