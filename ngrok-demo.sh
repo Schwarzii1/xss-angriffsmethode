@@ -126,9 +126,11 @@ for port in 3000 4000 5001; do
 done
 sleep 1
 
-log "Setze Protokolldatei zurück…"
+log "Setze Protokolldateien zurück…"
 echo "=== Gestohlene Cookies – Labor 8 Angreifer-Server ===" > "$ATK_DIR/stolen_cookies.txt"
 echo "" >> "$ATK_DIR/stolen_cookies.txt"
+echo "=== Keylogger – Labor 8 Angreifer-Server ===" > "$ATK_DIR/keylog.txt"
+echo "" >> "$ATK_DIR/keylog.txt"
 
 # --------------------------------------------------------------------------
 # Alle drei Server starten
