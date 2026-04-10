@@ -27,8 +27,21 @@ const supportAnfragen = [];
 // Demo-Schutzschalter
 let inputValidation = false;
 
+// Erkannte XSS-Angriffe
+const xssAngriffe = [];
+
 function containsXSS(str) {
   return /<[^>]*>|javascript:|on\w+\s*=/i.test(str);
+}
+
+function logXSS(user, feld, payload) {
+  xssAngriffe.push({
+    timestamp: new Date().toLocaleString('de-DE'),
+    von: user,
+    feld,
+    payload,
+  });
+  console.log(`[XSS BLOCKIERT] ${user} → Feld: ${feld} | Payload: ${payload}`);
 }
 
 function generateToken(username) {
@@ -90,7 +103,7 @@ function validationToggle() {
 }
 
 function navBar(user) {
-  if (!user) return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;"><a href="/login">Login</a>${validationToggle()}</div></nav>`;
+  if (!user) return `<nav><span>🏦 DemoBank Online-Banking</span><div><a href="/login">Login</a></div></nav>`;
   if (user.role === 'Admin') {
     return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
       <span>Eingeloggt als <strong>${user.username}</strong></span>
@@ -99,13 +112,12 @@ function navBar(user) {
       ${validationToggle()}
     </div></nav>`;
   }
-  return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
-    <span>Eingeloggt als <strong>${user.username}</strong></span>
+  return `<nav><span>🏦 DemoBank Online-Banking</span><div>
+    Eingeloggt als <strong>${user.username}</strong>
     <a href="/dashboard">Dashboard</a>
     <a href="/ueberweisung">Überweisung</a>
     <a href="/support">Support</a>
     <a href="/logout">Logout</a>
-    ${validationToggle()}
   </div></nav>`;
 }
 
@@ -272,8 +284,10 @@ app.post('/ueberweisung', (req, res) => {
   const { iban, empfaenger, betrag, verwendungszweck } = req.body;
   const betragNum = parseFloat(betrag);
 
-  if (inputValidation && containsXSS(verwendungszweck))
+  if (inputValidation && containsXSS(verwendungszweck)) {
+    logXSS(user.username, 'Verwendungszweck', verwendungszweck);
     return res.redirect('/ueberweisung?fehler=XSS-Angriff+erkannt+und+blockiert');
+  }
 
   if (isNaN(betragNum) || betragNum <= 0)
     return res.redirect('/ueberweisung?fehler=Ungültiger+Betrag');
@@ -357,8 +371,14 @@ app.post('/support', (req, res) => {
 
   const { betreff, nachricht } = req.body;
 
-  if (inputValidation && (containsXSS(betreff) || containsXSS(nachricht)))
+  if (inputValidation && containsXSS(betreff)) {
+    logXSS(user.username, 'Support-Betreff', betreff);
     return res.redirect('/support?fehler=XSS-Angriff+erkannt+und+blockiert');
+  }
+  if (inputValidation && containsXSS(nachricht)) {
+    logXSS(user.username, 'Support-Nachricht', nachricht);
+    return res.redirect('/support?fehler=XSS-Angriff+erkannt+und+blockiert');
+  }
 
   supportAnfragen.push({
     id: Date.now(),
@@ -459,6 +479,23 @@ app.get('/admin', (req, res) => {
           </form>`
       }
     </div>`).join('')}
+  </div>
+
+  <div class="card">
+    <h2>🛡️ Erkannte XSS-Angriffe</h2>
+    ${xssAngriffe.length === 0
+      ? '<p><em>Keine Angriffe erkannt.</em></p>'
+      : `<table>
+          <tr><th>Zeit</th><th>Benutzer</th><th>Feld</th><th>Payload</th></tr>
+          ${xssAngriffe.slice().reverse().map(a => `
+          <tr>
+            <td>${a.timestamp}</td>
+            <td>${a.von}</td>
+            <td>${a.feld}</td>
+            <td><code style="font-size:0.8em;word-break:break-all;">${a.payload.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code></td>
+          </tr>`).join('')}
+        </table>`
+    }
   </div>
 
   <div class="warning">
