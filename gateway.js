@@ -26,10 +26,17 @@ function isAttackerRoute(path) {
 const server = http.createServer((req, res) => {
   const targetPort = isAttackerRoute(req.url) ? ATK_PORT : BANK_PORT;
 
+  // /attacker und /attacker/ auf / umschreiben damit der Angreifer-Server
+  // sein Dashboard ausliefert (er kennt nur /)
+  let targetPath = req.url;
+  if (targetPort === ATK_PORT && req.url.startsWith('/attacker')) {
+    targetPath = req.url.slice('/attacker'.length) || '/';
+  }
+
   const options = {
     hostname: '127.0.0.1',
     port: targetPort,
-    path: req.url,
+    path: targetPath,
     method: req.method,
     headers: { ...req.headers, host: `localhost:${targetPort}` },
   };
