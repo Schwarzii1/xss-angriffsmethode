@@ -34,6 +34,11 @@ function containsXSS(str) {
   return /<[^>]*>|javascript:|on\w+\s*=/i.test(str);
 }
 
+function safeRender(str) {
+  if (!inputValidation) return str;
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function logXSS(user, feld, payload) {
   xssAngriffe.push({
     timestamp: new Date().toLocaleString('de-DE'),
@@ -202,9 +207,9 @@ app.get('/dashboard', (req, res) => {
         return `<tr>
           <td>${t.timestamp}</td>
           <td>${gegenseite}</td>
-          <td>${t.verwendungszweck}</td>
+          <td>${safeRender(t.verwendungszweck)}</td>
           <td>${betragHtml}</td>
-        </tr>`;  // VULNERABILITY: verwendungszweck direkt gerendert
+        </tr>`;  // VULNERABILITY: verwendungszweck direkt gerendert (wenn Validation AUS)
       }).join('');
 
   res.send(`<!DOCTYPE html>
@@ -327,8 +332,8 @@ app.get('/support', (req, res) => {
     ? '<p><em>Noch keine Anfragen gesendet.</em></p>'
     : meineAnfragen.slice().reverse().map(a => `
       <div class="card">
-        <strong>${a.betreff}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small>
-        <p style="white-space:pre-wrap;">${a.nachricht}</p>
+        <strong>${safeRender(a.betreff)}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small>
+        <p style="white-space:pre-wrap;">${safeRender(a.nachricht)}</p>
         ${a.antwort
           ? `<div class="success"><strong>Antwort vom Support:</strong><br>${a.antwort}</div>`
           : '<div class="warning">⏳ Noch keine Antwort vom Support.</div>'
@@ -456,7 +461,7 @@ app.get('/admin', (req, res) => {
           <td>${t.von}</td>
           <td>${t.an}</td>
           <td>${formatEuro(t.betrag)}</td>
-          <td>${t.verwendungszweck}</td>
+          <td>${safeRender(t.verwendungszweck)}</td>
         </tr>`).join('')}
     </table>`}
   </div>
@@ -466,8 +471,8 @@ app.get('/admin', (req, res) => {
     ${supportAnfragen.length === 0 ? '<p><em>Keine Anfragen vorhanden.</em></p>' : supportAnfragen.slice().reverse().map(a => `
     <div style="border:1px solid #d0d7e3;border-radius:6px;padding:16px;margin-bottom:12px;background:white;">
       <strong>Von: ${a.von}</strong> &nbsp; <small style="color:#888;">${a.timestamp}</small><br>
-      <strong>Betreff:</strong> ${a.betreff}<br><br>
-      <div style="background:#f8f9fa;padding:10px;border-radius:4px;margin-bottom:10px;">${a.nachricht}</div>
+      <strong>Betreff:</strong> ${safeRender(a.betreff)}<br><br>
+      <div style="background:#f8f9fa;padding:10px;border-radius:4px;margin-bottom:10px;">${safeRender(a.nachricht)}</div>
       ${a.antwort
         ? `<div class="success"><strong>Geantwortet:</strong> ${a.antwort}</div>`
         : `<form method="POST" action="/admin/reply" style="margin-top:8px;">
