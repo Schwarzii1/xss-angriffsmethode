@@ -24,6 +24,13 @@ const transaktionen = [];
 // Support-Anfragen
 const supportAnfragen = [];
 
+// Demo-Schutzschalter
+let inputValidation = false;
+
+function containsXSS(str) {
+  return /<[^>]*>|javascript:|on\w+\s*=/i.test(str);
+}
+
 function generateToken(username) {
   const token = `sess-${username}-${Math.random().toString(36).slice(2)}`;
   sessions[token] = username;
@@ -71,23 +78,45 @@ const css = `
   .gruen { color: #28a745; font-weight: bold; }
 `;
 
+function validationToggle() {
+  const checked = inputValidation ? 'checked' : '';
+  const label   = inputValidation
+    ? '<span style="color:#90ee90;">🛡️ Input Validation: AN</span>'
+    : '<span style="color:#ffaaaa;">⚠️ Input Validation: AUS</span>';
+  return `<label style="cursor:pointer;margin-left:20px;font-size:0.85em;display:flex;align-items:center;gap:6px;">
+    <input type="checkbox" ${checked} onchange="fetch('/toggle-validation').then(()=>location.reload())" style="width:auto;margin:0;">
+    ${label}
+  </label>`;
+}
+
 function navBar(user) {
-  if (!user) return `<nav><span>🏦 DemoBank Online-Banking</span><div><a href="/login">Login</a></div></nav>`;
+  if (!user) return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;"><a href="/login">Login</a>${validationToggle()}</div></nav>`;
   if (user.role === 'Admin') {
-    return `<nav><span>🏦 DemoBank Online-Banking</span><div>
-      Eingeloggt als <strong>${user.username}</strong>
+    return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
+      <span>Eingeloggt als <strong>${user.username}</strong></span>
       <a href="/admin">Admin-Panel</a>
       <a href="/logout">Logout</a>
+      ${validationToggle()}
     </div></nav>`;
   }
-  return `<nav><span>🏦 DemoBank Online-Banking</span><div>
-    Eingeloggt als <strong>${user.username}</strong>
+  return `<nav><span>🏦 DemoBank Online-Banking</span><div style="display:flex;align-items:center;">
+    <span>Eingeloggt als <strong>${user.username}</strong></span>
     <a href="/dashboard">Dashboard</a>
     <a href="/ueberweisung">Überweisung</a>
     <a href="/support">Support</a>
     <a href="/logout">Logout</a>
+    ${validationToggle()}
   </div></nav>`;
 }
+
+// -------------------------------------------------------
+// GET /toggle-validation
+// -------------------------------------------------------
+app.get('/toggle-validation', (req, res) => {
+  inputValidation = !inputValidation;
+  console.log(`[Demo] Input Validation: ${inputValidation ? 'AN' : 'AUS'}`);
+  res.sendStatus(200);
+});
 
 // -------------------------------------------------------
 // GET /login
@@ -243,6 +272,9 @@ app.post('/ueberweisung', (req, res) => {
   const { iban, empfaenger, betrag, verwendungszweck } = req.body;
   const betragNum = parseFloat(betrag);
 
+  if (inputValidation && containsXSS(verwendungszweck))
+    return res.redirect('/ueberweisung?fehler=XSS-Angriff+erkannt+und+blockiert');
+
   if (isNaN(betragNum) || betragNum <= 0)
     return res.redirect('/ueberweisung?fehler=Ungültiger+Betrag');
   if (USERS[user.username].kontostand < betragNum)
@@ -289,7 +321,11 @@ app.get('/support', (req, res) => {
         }
       </div>`).join('');
 
-  const msg = req.query.ok ? '<div class="success">✓ Anfrage erfolgreich gesendet.</div>' : '';
+  const msg = req.query.ok
+    ? '<div class="success">✓ Anfrage erfolgreich gesendet.</div>'
+    : req.query.fehler
+    ? `<div class="danger">🛡️ ${req.query.fehler}</div>`
+    : '';
 
   res.send(`<!DOCTYPE html>
 <html lang="de"><head><meta charset="UTF-8"><title>Support – DemoBank</title><style>${css}</style></head>
@@ -320,6 +356,10 @@ app.post('/support', (req, res) => {
   if (!user) return res.redirect('/login');
 
   const { betreff, nachricht } = req.body;
+
+  if (inputValidation && (containsXSS(betreff) || containsXSS(nachricht)))
+    return res.redirect('/support?fehler=XSS-Angriff+erkannt+und+blockiert');
+
   supportAnfragen.push({
     id: Date.now(),
     von: user.username,
