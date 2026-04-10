@@ -4,6 +4,25 @@ const path = require('path');
 const app = express();
 const PORT = 4000;
 
+// -------------------------------------------------------
+// Optionaler Basic-Auth-Schutz fürs Dashboard
+// Wird nur aktiviert wenn DEMO_PASSWORD gesetzt ist.
+// /steal bleibt absichtlich offen – wird vom XSS-Payload
+// im Browser des Opfers aufgerufen und kann keine
+// Credentials mitsenden.
+// -------------------------------------------------------
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD;
+function requireAuth(req, res, next) {
+  if (!DEMO_PASSWORD) return next(); // kein Passwort gesetzt → offen
+  const auth = req.headers['authorization'] || '';
+  const encoded = auth.startsWith('Basic ') ? auth.slice(6) : '';
+  const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+  const [, pass] = decoded.split(':');
+  if (pass === DEMO_PASSWORD) return next();
+  res.setHeader('WWW-Authenticate', 'Basic realm="Angreifer-Dashboard"');
+  res.status(401).send('Authentifizierung erforderlich');
+}
+
 const STOLEN_COOKIES_FILE = path.join(__dirname, 'stolen_cookies.txt');
 
 // Ensure the file exists
@@ -62,7 +81,9 @@ app.get('/steal', (req, res) => {
 // -------------------------------------------------------
 // GET / – simple dashboard showing all stolen cookies
 // -------------------------------------------------------
-app.get('/', (req, res) => {
+// Dashboard erreichbar unter / und /attacker (für Gateway-Routing)
+app.get(['/attacker', '/attacker/'], requireAuth, (req, res) => res.redirect('/'));
+app.get('/', requireAuth, (req, res) => {
   let fileContent = '';
   try {
     fileContent = fs.readFileSync(STOLEN_COOKIES_FILE, 'utf8');
@@ -112,7 +133,7 @@ app.get('/', (req, res) => {
 // -------------------------------------------------------
 // GET /clear – reset the stolen cookies file (for demos)
 // -------------------------------------------------------
-app.get('/clear', (req, res) => {
+app.get('/clear', requireAuth, (req, res) => {
   fs.writeFileSync(STOLEN_COOKIES_FILE, '=== Gestohlene Cookies – Labor 8 Angreifer-Server ===\n\n');
   console.log('[ANGREIFER] Protokoll gelöscht.');
   res.redirect('/');
